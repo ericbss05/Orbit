@@ -15,6 +15,8 @@ type RoutineCardProps = {
   routine: RoutineDraft
   toolCards: ToolSuggestionCardData[]
   routineId?: string
+  messageId?: string
+  savedRoutineId?: string
   onSaved?: () => void
 }
 
@@ -50,11 +52,14 @@ export function RoutineCard({
   routine,
   toolCards,
   routineId,
+  messageId,
+  savedRoutineId,
   onSaved,
 }: RoutineCardProps) {
   const [tools, setTools] = useState(toolCards)
   const [isCreating, setIsCreating] = useState(false)
-  const [isCreated, setIsCreated] = useState(false)
+  const [isCreated, setIsCreated] = useState(Boolean(savedRoutineId))
+  const [createdId, setCreatedId] = useState(savedRoutineId)
   const cardsBySlug = new Map(
     tools.map((tool) => [tool.slug.toLowerCase(), tool])
   )
@@ -94,10 +99,13 @@ export function RoutineCard({
     setIsCreating(true)
 
     try {
-      if (routineId) {
-        await axios.patch("/api/routines", { agentId, routineId, routine })
+      const targetId = routineId ?? createdId
+
+      if (targetId) {
+        await axios.patch("/api/routines", { agentId, routineId: targetId, routine })
       } else {
-        await axios.post("/api/routines", { agentId, routine })
+        const { data } = await axios.post("/api/routines", { agentId, routine, messageId })
+        setCreatedId(data.routine.id)
       }
       setIsCreated(true)
       window.dispatchEvent(new CustomEvent("routines-changed", { detail: { agentId } }))

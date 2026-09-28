@@ -46,6 +46,7 @@ export const Routines = pgTable("routines", {
   userEmail: text("user_email")
     .notNull()
     .references(() => users.email),
+  messageId: varchar("message_id").unique(),
 
   name: varchar("name").notNull(),
   goal: text("goal").notNull(),
@@ -137,6 +138,7 @@ export const AgentWorkflows = pgTable("agent_workflows", {
   status: varchar("status", { length: 32 }).notNull(),
   state: jsonb("state").notNull(),
   connectionRequestId: varchar("connection_request_id"),
+  decision: varchar("decision", { length: 16 }), // "approved" | "rejected" | null
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

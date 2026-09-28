@@ -1,0 +1,1 @@
+ALTER TABLE "agent_workflows" ADD COLUMN "decision" varchar(16);

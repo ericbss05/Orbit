@@ -322,37 +322,52 @@ export function ChatPanel() {
   }
 
   return (
-    <section className="flex min-h-[620px] min-w-0 flex-col bg-background lg:h-svh lg:min-h-0">
+    <section
+  className={`flex min-h-[620px] min-w-0 flex-col bg-background transition-[margin-right] duration-300 ease-in-out lg:h-svh lg:min-h-0 ${
+    isConfigPanelOpen ? "mr-[350px]" : "mr-0"
+  }`}
+>
       <header className="flex h-[64px] shrink-0 items-center justify-between px-5 sm:px-7">
-        <div className="flex min-w-0 items-center gap-3">
-          {agentConfig?.agentImage ? (
-            <img src={agentConfig.agentImage} alt="agent" className="size-9 rounded-full object-cover" />
-          ) : (
-            <Skeleton className="size-9 rounded-full" />
-          )}
-          <div className="min-w-0">
-            {agentConfig?.name ? (
-              <h1 className="truncate text-[15px] font-semibold leading-5">{agentConfig.name}</h1>
-            ) : (
-              <Skeleton className="h-4 w-32" />
-            )}
-            {agentConfig ? (
-              <p className="truncate text-xs text-muted-foreground">{agentConfig.description}</p>
-            ) : (
-              <Skeleton className="mt-1 h-3 w-44" />
-            )}
-          </div>
-        </div>
-        <Button
-          aria-label="Open agent configuration"
-          className="size-9 rounded-full"
-          onClick={() => setIsConfigPanelOpen(true)}
-          size="icon"
-          variant="ghost"
-        >
-          <Monitor className="size-4" />
-        </Button>
-      </header>
+  <div className="flex min-w-0 items-center gap-3">
+    {agentConfig?.agentImage ? (
+      <img
+        src={agentConfig.agentImage}
+        alt="agent"
+        className="size-9 rounded-full object-cover"
+      />
+    ) : (
+      <Skeleton className="size-9 rounded-full" />
+    )}
+
+    <div className="min-w-0">
+      {agentConfig?.name ? (
+        <h1 className="truncate text-[15px] font-semibold leading-5">
+          {agentConfig.name}
+        </h1>
+      ) : (
+        <Skeleton className="h-4 w-32" />
+      )}
+
+      {agentConfig ? (
+        <p className="truncate text-xs text-muted-foreground">
+          {agentConfig.description}
+        </p>
+      ) : (
+        <Skeleton className="mt-1 h-3 w-44" />
+      )}
+    </div>
+  </div>
+
+  <Button
+    aria-label="Open agent configuration"
+    className="size-9 rounded-full"
+    onClick={() => setIsConfigPanelOpen((prev) => !prev)}
+    size="icon"
+    variant="ghost"
+  >
+    <Monitor className="size-4" />
+  </Button>
+</header>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-6 pt-2 sm:px-8">
         <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4">

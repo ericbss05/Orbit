@@ -277,26 +277,48 @@ export function ScheduleTab() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {routines.map((routine) => (
-            <article className="rounded-xl border bg-background p-3.5" key={routine.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{routine.name}</p>
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+        <ul className="divide-y overflow-hidden rounded-xl border bg-background">
+          {routines.map((routine) => {
+            const isRunning = Boolean(routine.executionStatus && runningStatuses.has(routine.executionStatus))
+
+            return (
+              <li
+                className="flex items-center justify-between gap-3 px-3.5 py-3 transition-colors hover:bg-muted/40"
+                key={routine.id}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold">{routine.name}</p>
+                    <Badge
+                      className="shrink-0"
+                      variant={isRunning ? "default" : routine.isActive ? "secondary" : "outline"}
+                    >
+                      {isRunning ? "Running" : routine.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                  <p className="mt-0.5 line-clamp-1 text-xs leading-5 text-muted-foreground">
                     {routine.goal}
                   </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Repeat2 className="size-3.5" />
+                      <span className="capitalize">{routine.schedule.frequency}</span>
+                      <span>at {routine.schedule.time}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Clock3 className="size-3.5" />
+                      {routine.nextRunAt
+                        ? `Next: ${new Intl.DateTimeFormat(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                          timeZone: routine.schedule.timezone,
+                        }).format(new Date(routine.nextRunAt))}`
+                        : "No future runs"}
+                    </span>
+                  </div>
                 </div>
+
                 <div className="flex shrink-0 items-center gap-1">
-                  <Badge variant={
-                    routine.executionStatus && runningStatuses.has(routine.executionStatus)
-                      ? "default"
-                      : routine.isActive ? "secondary" : "outline"
-                  }>
-                    {routine.executionStatus && runningStatuses.has(routine.executionStatus)
-                      ? "Running"
-                      : routine.isActive ? "Active" : "Inactive"}
-                  </Badge>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger
@@ -304,25 +326,16 @@ export function ScheduleTab() {
                           <Button
                             aria-label={`Run ${routine.name}`}
                             className="size-7"
-                            disabled={
-                              !routine.isActive
-                              || Boolean(routine.executionStatus && runningStatuses.has(routine.executionStatus))
-                            }
+                            disabled={!routine.isActive || isRunning}
                             onClick={() => setRoutineToRun(routine)}
                             size="icon"
                             variant="ghost"
                           />
                         )}
                       >
-                        {routine.executionStatus && runningStatuses.has(routine.executionStatus)
-                          ? <Loader2 className="animate-spin" />
-                          : <Play />}
+                        {isRunning ? <Loader2 className="animate-spin" /> : <Play />}
                       </TooltipTrigger>
-                      <TooltipContent>
-                        {routine.executionStatus && runningStatuses.has(routine.executionStatus)
-                          ? "Running"
-                          : "Run now"}
-                      </TooltipContent>
+                      <TooltipContent>{isRunning ? "Running" : "Run now"}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <DropdownMenu>
@@ -360,29 +373,10 @@ export function ScheduleTab() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-              </div>
-              <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Repeat2 className="size-3.5" />
-                  <span className="capitalize">{routine.schedule.frequency}</span>
-                  <span>at {routine.schedule.time}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock3 className="size-3.5" />
-                  <span>
-                    {routine.nextRunAt
-                      ? `Next: ${new Intl.DateTimeFormat(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                        timeZone: routine.schedule.timezone,
-                      }).format(new Date(routine.nextRunAt))}`
-                      : "No future runs"}
-                  </span>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+              </li>
+            )
+          })}
+        </ul>
       )}
 
       <AlertDialog

@@ -11,6 +11,7 @@ import { z } from "zod";
 const createRoutineSchema = z.object({
   agentId: z.string().min(1),
   routine: routineSchema,
+  messageId: z.string().min(1).optional(),
 });
 
 const updateRoutineSchema = z.object({
@@ -25,6 +26,13 @@ const updateRoutineSchema = z.object({
     path: ["routine"],
   }
 );
+
+// Postgres unique violation (code 23505). Depending on the Drizzle / driver
+// version the code lives on the error itself or on its `cause`.
+function isUniqueViolation(error: unknown) {
+  const err = error as { code?: string; cause?: { code?: string } } | null;
+  return (err?.code ?? err?.cause?.code) === "23505";
+}
 
 async function getOwnedAgent(agentId: string, userEmail: string) {
   const [agent] = await db
@@ -122,7 +130,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { agentId, routine } = parsed.data;
+  const { agentId, routine, messageId } = parsed.data;
   const normalizedRoutine = {
     ...routine,
     schedule: normalizeRoutineSchedule(routine.schedule),
@@ -141,21 +149,35 @@ export async function POST(req: NextRequest) {
   }
 
   const routineId = crypto.randomUUID();
-  const [created] = await db
-    .insert(Routines)
-    .values({
-      id: routineId,
-      agentId,
-      userEmail: session.user.email,
-      name: normalizedRoutine.name,
-      goal: normalizedRoutine.goal,
-      instructions: normalizedRoutine.instructions,
-      schedule: normalizedRoutine.schedule,
-      tools: prepared.normalizedTools,
-      nextRunAt: prepared.nextRunAt,
-    })
-    .returning();
-  return NextResponse.json({ routine: created }, { status: 201 });
+
+  try {
+    const [created] = await db
+      .insert(Routines)
+      .values({
+        id: routineId,
+        agentId,
+        userEmail: session.user.email,
+        messageId: messageId ?? null,
+        name: normalizedRoutine.name,
+        goal: normalizedRoutine.goal,
+        instructions: normalizedRoutine.instructions,
+        schedule: normalizedRoutine.schedule,
+        tools: prepared.normalizedTools,
+        nextRunAt: prepared.nextRunAt,
+      })
+      .returning();
+
+    return NextResponse.json({ routine: created }, { status: 201 });
+  } catch (error) {
+    // Double click or two tabs: this message already has a routine.
+    if (isUniqueViolation(error)) {
+      return NextResponse.json(
+        { error: "This routine has already been created" },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 }
 
 export async function PATCH(req: NextRequest) {
@@ -235,6 +257,8 @@ export async function PATCH(req: NextRequest) {
   // Do not enqueue or integrate with Inngest here. Persist the updated
   // schedule and let the application handle scheduling separately.
 
+  // messageId is intentionally not touched: the link to the chat message
+  // stays intact after an update.
   const [updated] = await db
     .update(Routines)
     .set({

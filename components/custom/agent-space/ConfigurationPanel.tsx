@@ -1,15 +1,13 @@
 "use client"
 
-import { Settings } from "lucide-react"
+import { Settings, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { ScheduleTab } from "./ScheduleTab"
 import { VMDesktop } from "./VMDesktop"
 import { AgentConfigDialog } from "./AgentConfigDialog"
@@ -20,27 +18,41 @@ type ConfigurationPanelProps = {
   onOpenChange: (open: boolean) => void
 }
 
-export function ConfigurationPanel({ open, onOpenChange }: ConfigurationPanelProps) {
+export function ConfigurationPanel({
+  open,
+  onOpenChange,
+}: ConfigurationPanelProps) {
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false)
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-[350px]">
-          <SheetHeader className="h-[72px] shrink-0 flex-row items-center justify-between space-y-0 border-b pl-5 pr-14">
-            <div>
-              <SheetTitle>Agent Configuration</SheetTitle>
-              <SheetDescription className="mt-0.5 text-xs">
-                Customize how your agent works
-              </SheetDescription>
-            </div>
+      <aside
+        className={`
+          fixed right-0 top-0 z-40 flex h-screen w-[350px] flex-col
+          border-l bg-background
+          transition-transform duration-300 ease-in-out
+          ${open ? "translate-x-0" : "translate-x-full"}
+        `}
+      >
+        {/* Header */}
+        <div className="flex h-[72px] shrink-0 items-center justify-between border-b pl-5 pr-4">
+          <div>
+            <h2 className="text-sm font-semibold">
+              Agent Configuration
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Customize how your agent works
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger
                   render={
                     <Button
                       aria-label="Open agent configuration"
-                      className="size-9 shrink-0 rounded-full bg-white/10 text-foreground hover:bg-white/15"
+                      className="size-9 shrink-0 rounded-full"
                       onClick={() => setIsConfigDialogOpen(true)}
                       size="icon"
                       variant="ghost"
@@ -49,21 +61,39 @@ export function ConfigurationPanel({ open, onOpenChange }: ConfigurationPanelPro
                 >
                   <Settings className="size-4" />
                 </TooltipTrigger>
-                <TooltipContent>Configure</TooltipContent>
+
+                <TooltipContent>
+                  Configure
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-          </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-5">
-              <VMDesktop />
-              <ScheduleTab />
-            </div>
+            {/* Collapse */}
+            <Button
+              aria-label="Close configuration"
+              size="icon"
+              variant="ghost"
+              className="size-9"
+              onClick={() => onOpenChange(false)}
+            >
+              <ChevronRight className="size-4" />
+            </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
 
-      <AgentConfigDialog open={isConfigDialogOpen} onOpenChange={setIsConfigDialogOpen} />
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-5">
+            <VMDesktop />
+            <ScheduleTab />
+          </div>
+        </div>
+      </aside>
+
+      <AgentConfigDialog
+        open={isConfigDialogOpen}
+        onOpenChange={setIsConfigDialogOpen}
+      />
     </>
   )
 }

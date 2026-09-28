@@ -3,11 +3,11 @@
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import type { MessageType } from "@/type/Message"
-import axios from "axios"
+import axios, { AxiosError } from "axios"
 import { Check, Loader2, ShieldCheck, X, ChevronDown } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { RoutineCard } from "./RoutineCard"
 import { ToolSuggestionCard } from "./ToolSuggestionCard"
 import { cn } from "@/lib/utils"
@@ -20,6 +20,36 @@ type AgentResponseViewProps = {
   onRoutineSaved?: (routineId?: string) => void
 }
 
+// Looks up whether a routine was already created from this message.
+// The lookup is skipped entirely when the message has no routine card.
+function useSavedRoutine(agentId: string, messageId: string | undefined, enabled: boolean) {
+  const shouldLoad = enabled && Boolean(messageId)
+  const [state, setState] = useState<{ loaded: boolean; routineId?: string }>({
+    loaded: !shouldLoad,
+  })
+
+  const load = useCallback(async () => {
+    if (!shouldLoad) return
+
+    try {
+      const { data } = await axios.get("/api/routines", { params: { agentId } })
+      const found = (data.routines as { id: string; messageId: string | null }[])
+        .find((routine) => routine.messageId === messageId)
+      setState({ loaded: true, routineId: found?.id })
+    } catch {
+      setState({ loaded: true })
+    }
+  }, [agentId, messageId, shouldLoad])
+
+  useEffect(() => {
+    load()
+    window.addEventListener("routines-changed", load)
+    return () => window.removeEventListener("routines-changed", load)
+  }, [load])
+
+  return state
+}
+
 export function AgentResponseView({
   message,
   agentId,
@@ -28,6 +58,7 @@ export function AgentResponseView({
   onRoutineSaved,
 }: AgentResponseViewProps) {
   const response = message.response
+  const savedRoutine = useSavedRoutine(agentId, message.id, Boolean(response?.routine))
 
   if (!response) {
     return <MarkdownMessage>{message.content}</MarkdownMessage>
@@ -75,12 +106,17 @@ export function AgentResponseView({
           />
         </div>
       ))}
-      {response.routine && (
+      {response.routine && savedRoutine.loaded && (
         <RoutineCard
+          // Remount when the saved state changes (created or deleted elsewhere)
+          // so the internal isCreated state is re-initialised.
+          key={savedRoutine.routineId ?? "unsaved"}
           agentId={agentId}
           routine={response.routine}
           toolCards={message.toolCards ?? []}
           routineId={message.editingRoutineId}
+          messageId={message.id}
+          savedRoutineId={savedRoutine.routineId}
           onSaved={() => onRoutineSaved?.(message.editingRoutineId)}
         />
       )}
@@ -109,27 +145,66 @@ function ConfirmationCard({
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [decision, setDecision] = useState<"approved" | "rejected" | null>(null)
+  const [loaded, setLoaded] = useState(false)
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    axios
+      .get("/api/agent/workflows", {
+        params: { workflowId: confirmation.workflowId },
+      })
+      .then(({ data }) => {
+        if (!cancelled && data.decision) {
+          setDecision(data.decision)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setLoaded(true)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [confirmation.workflowId])
 
   const decide = async (approved: boolean) => {
     setIsSubmitting(true)
+    const targetDecision = approved ? "approved" : "rejected"
+
     try {
       const { data } = await axios.post("/api/agent/workflows", {
         workflowId: confirmation.workflowId,
         approved,
       })
-      setDecision(approved ? "approved" : "rejected")
+      setDecision(targetDecision)
       onResult?.(data)
-    } catch {
-      toast.add({
-        title: "Unable to process confirmation",
-        description: "The action was not executed. Please try again.",
-        type: "error",
-      })
+    } catch (error) {
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        // En cas de conflit (action déjà décidée dans un autre onglet/session)
+        const serverDecision = error.response.data?.decision ?? targetDecision
+        setDecision(serverDecision)
+        toast.add({
+          title: "Action déjà traitée",
+          description: "Cette confirmation a déjà été enregistrée.",
+          type: "info",
+        })
+      } else {
+        toast.add({
+          title: "Unable to process confirmation",
+          description: "The action was not executed. Please try again.",
+          type: "error",
+        })
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
+
+  if (!loaded) return null
 
   return (
     <section

@@ -2,9 +2,10 @@
 
 import axios from "axios"
 import { useContext, useEffect, useRef, useState } from "react"
-import { Compass, LoaderCircle, Mail, Maximize2, Monitor, Play, Power, RotateCw, X } from "lucide-react"
+import { Compass, LoaderCircle, Mail, Maximize2, Monitor, Power, RotateCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { AgentConfigContext } from "@/context/AgentConfigContext"
 import { cn } from "cn"
 
@@ -12,6 +13,9 @@ const INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000
 
 // Swap this for any wallpaper you like — drop the file in /public/wallpapers.
 const DEFAULT_WALLPAPER_SRC = "/wallpapers/vm-desktop-default.jpg"
+
+const CARD_BACKGROUND_URL =
+  "https://img.magnific.com/free-vector/monochrome-realistic-liquid-effect-background_474888-7310.jpg?semt=ais_hybrid&w=740&q=80"
 
 type VmStatus = "active" | "inactive" | "paused" | "unconfigured" | "error"
 
@@ -165,10 +169,15 @@ export function VMDesktop() {
           "group relative block h-44 w-full overflow-hidden rounded-2xl border text-left transition hover:border-primary/40",
           isLoading && "cursor-wait"
         )}
+        style={{
+          backgroundImage: `url('${CARD_BACKGROUND_URL}')`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
       >
         {/* background scene: live stream, or a wallpaper with a mocked-up desktop */}
         <div className="absolute inset-0">
-          {showingLive ? (
+          {showingLive && !isOpen ? (
             <iframe
               title="Agent VM Desktop Preview"
               src={streamUrl ?? undefined}
@@ -176,6 +185,9 @@ export function VMDesktop() {
               tabIndex={-1}
               allow="clipboard-read; clipboard-write"
             />
+          ) : showingLive ? (
+            // Dialog ouvert : on ne charge pas une seconde connexion au même flux
+            <div className="h-full w-full bg-black" />
           ) : (
             <div className="relative h-full w-full">
               {/* wallpaper photo */}
@@ -207,7 +219,7 @@ export function VMDesktop() {
                 </div>
               </div>
 
-              {/* front window: mocked outreach/queue list, echoes the reference */}
+              {/* front window: mocked outreach/queue list */}
               <div className="absolute left-[30%] top-[30%] w-[62%] overflow-hidden rounded-[10px] border border-white/20 bg-black/55 shadow-xl backdrop-blur-2xl">
                 <div className="flex h-4 items-center gap-1 border-b border-white/10 px-1.5">
                   <span className="size-1.5 rounded-full bg-[#ff5f57]" />
@@ -246,8 +258,7 @@ export function VMDesktop() {
           )}
         </div>
 
-        {/* title overlay: no solid bar, just text + icon floating on the scene,
-            faded in with a subtle top scrim for legibility */}
+        {/* title overlay: text + icon floating on the scene, with a subtle top scrim */}
         <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/45 to-transparent px-3 pb-6 pt-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-white/15 bg-white/10 text-white backdrop-blur-md">
@@ -270,24 +281,36 @@ export function VMDesktop() {
         </div>
 
         {showingLive ? (
-          <div className="absolute right-3 bottom-3 flex items-center gap-1 rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">
             <Maximize2 className="size-3" />
             Open
           </div>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
-            <div className="flex flex-col items-center gap-2 rounded-lg border border-white/10 bg-background/95 px-4 py-3 text-center shadow-sm">
-              <span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                {isLoading ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4 fill-current" />}
-              </span>
-              <div>
-                <p className="text-sm font-medium">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-2 rounded-lg px-4 py-3 text-center">
+              {/* Liquid Glass badge */}
+              <Badge
+                variant="outline"
+                className="
+                  relative overflow-hidden rounded-full px-4 py-1.5
+                  border border-white/30
+                  bg-white/10 dark:bg-white/5
+                  text-white
+                  backdrop-blur-xl backdrop-saturate-[1.8]
+                  shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),inset_0_-1px_0_0_rgba(255,255,255,0.1),0_8px_32px_rgba(0,0,0,0.12)]
+                  transition-all duration-300 ease-out
+                  group-hover:bg-white/20 group-hover:scale-[1.03]
+                  group-hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7),inset_0_-1px_0_0_rgba(255,255,255,0.15),0_12px_40px_rgba(0,0,0,0.18)]
+                  group-active:scale-[0.98]
+                  before:pointer-events-none before:absolute before:inset-0 before:rounded-full
+                  before:bg-gradient-to-br before:from-white/40 before:via-transparent before:to-transparent
+                  before:opacity-70
+                "
+              >
+                <span className="relative text-sm font-medium drop-shadow-sm">
                   {isLoading ? "Activating VM" : hasSandbox ? "Reactivate VM" : "Activate VM"}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {hasSandbox ? "Resume this agent's desktop" : "Start this agent's desktop"}
-                </p>
-              </div>
+                </span>
+              </Badge>
             </div>
           </div>
         )}
@@ -295,14 +318,23 @@ export function VMDesktop() {
 
       {message && <p className="text-xs leading-5 text-destructive">{message}</p>}
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+      <Dialog
+        open={isOpen}
+        // évite de fermer le bureau par un clic accidentel à côté (Base UI)
+        disablePointerDismissal
+        onOpenChange={(open) => {
+          if (!open) closeDesktop()
+        }}
+      >
+        <DialogContent className="flex h-[90vh] w-[95vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-[95vw]">
+          {/* pr-12 laisse la place à la croix native du Dialog */}
+          <div className="flex h-12 shrink-0 items-center justify-between border-b pl-4 pr-12">
             <div className="flex items-center gap-2">
               <Monitor className="size-4 text-muted-foreground" />
-              <p className="text-sm font-medium">VM Desktop</p>
+              <DialogTitle className="text-sm font-medium">VM Desktop</DialogTitle>
               <Badge variant={badgeVariant}>{statusLabel}</Badge>
             </div>
+
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => activateVm()} disabled={isLoading}>
                 {isLoading ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCw className="size-4" />}
@@ -312,11 +344,13 @@ export function VMDesktop() {
                 <Power className="size-4" />
                 Pause
               </Button>
-              <Button size="icon-sm" variant="ghost" onClick={closeDesktop} aria-label="Close VM Desktop">
-                <X className="size-4" />
-              </Button>
             </div>
           </div>
+
+          <DialogDescription className="sr-only">
+            Bureau distant de la machine virtuelle de l&apos;agent
+          </DialogDescription>
+
           <div className="min-h-0 flex-1 bg-black">
             {streamUrl ? (
               <iframe
@@ -331,8 +365,8 @@ export function VMDesktop() {
               </div>
             )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
