@@ -58,15 +58,18 @@ function buildStoredMessages({
   toolCards?: unknown;
   editingRoutineId?: string | null;
 }) {
+  if (!response || typeof response !== "object") {
+    return messages;
+  }
+
   const agentMessage = getResponseMessage(response);
-  if (!agentMessage) return messages;
 
   return [
     ...messages,
     {
       id: crypto.randomUUID(),
       role: "agent",
-      content: agentMessage,
+      content: agentMessage ?? "",
       response,
       toolCards: toolCards ?? [],
       editingRoutineId: editingRoutineId || undefined,
@@ -89,6 +92,19 @@ export async function saveAgentChatHistory({
   await db.delete(AgentChatHistory).where(
     sql`${AgentChatHistory.updatedAt} < now() - interval '3 days'`
   );
+
+  console.log("SAVE CHAT HISTORY", {
+    response,
+    responseType:
+      response && typeof response === "object"
+        ? (response as { type?: unknown }).type
+        : null,
+    routine:
+      response && typeof response === "object"
+        ? (response as { routine?: unknown }).routine
+        : null,
+    message: getResponseMessage(response),
+  });
 
   const storedMessages = buildStoredMessages({
     messages,

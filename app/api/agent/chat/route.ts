@@ -13,6 +13,8 @@ import { getAgentChatHistory, saveAgentChatHistory } from "@/lib/agent-chat-hist
 
 const routineLanguage = /\b(every|everyday|daily|weekly|monthly|hourly|recurring|schedule(?:d)?|routine|automation|automatically|monitor|digest|each\s+(?:day|morning|evening|week|month)|remind\s+me|tomorrow|tonight)\b/i;
 const runRoutineLanguage = /\b(?:run|execute|start|trigger|launch)\b[\s\S]{0,80}\b(?:routine|automation)\b|\b(?:routine|automation)\b[\s\S]{0,80}\b(?:now|run|execute|start|trigger|launch)\b/i;
+const timePattern =
+    /\b(?:[01]?\d|2[0-3])(?:h(?:[0-5]\d)?|:[0-5]\d)\b|\b(?:1[0-2]|0?[1-9])(?::[0-5]\d)?\s*(?:a\.?m\.?|p\.?m\.?)\b/i;
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
@@ -461,8 +463,7 @@ export async function POST(req: NextRequest) {
             .filter((message) => message?.role === "user" && typeof message?.content === "string")
             .map((message) => message.content)
             .join("\n");
-        const hasTime = /\b(?:[01]?\d|2[0-3]):[0-5]\d\b|\b(?:1[0-2]|0?[1-9])(?::[0-5]\d)?\s*(?:a\.?m\.?|p\.?m\.?)\b/i
-            .test(requestText);
+        const hasTime = timePattern.test(requestText);
         if (planningOnly && !hasTime) {
             questions.push({
                 id: "run_time",
@@ -608,8 +609,7 @@ export async function POST(req: NextRequest) {
                 isEnabled: true,
             }))
         : [];
-    const hasExplicitTime = Boolean(editingRoutine) || /\b(?:[01]?\d|2[0-3]):[0-5]\d\b|\b(?:1[0-2]|0?[1-9])(?::[0-5]\d)?\s*(?:a\.?m\.?|p\.?m\.?)\b/i
-        .test(userRequestText);
+    const hasExplicitTime = Boolean(editingRoutine) || timePattern.test(userRequestText);
     const requiresSlackChannel = agentResponse.intent === "routine"
         && inferredRoutineTools.some((tool) => tool.slug.toLowerCase() === "slack")
         && !editingRoutine

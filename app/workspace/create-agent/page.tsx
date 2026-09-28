@@ -1,152 +1,173 @@
 "use client"
 
-import Link from "next/link"
-import { Loader2, ShuffleIcon } from "lucide-react"
+import { Loader2, Check } from "lucide-react"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
+import axios from "axios"
 
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import axios from 'axios'
-import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
+// Palette de couleurs de fond pour l'avatar
+const AVATAR_COLORS = [
+  "8b5e3c",
+  "ef4444",
+  "f97316",
+  "f5b942",
+  "22c55e",
+  "14b8a6",
+  "3b82f6",
+  "a78bfa",
+  "ec4899",
+  "9ca3af",
+]
+
+// Seeds préréglés pour proposer différents avatars
+const AVATAR_SEEDS = ["nova", "pixel", "bloom", "drift", "echo", "flux", "glow", "tide"]
+
+const AVATAR_STYLE = "glass"
+
+function buildAvatarUrl(seed: string, backgroundColor?: string) {
+  const params = new URLSearchParams({ seed })
+  if (backgroundColor) params.set("backgroundColor", backgroundColor)
+  return `https://api.dicebear.com/10.x/${AVATAR_STYLE}/svg?${params.toString()}`
+}
 
 function CreateAgent() {
+  const [name, setName] = useState("")
+  const [avatarSeed, setAvatarSeed] = useState<string>(AVATAR_SEEDS[6])
+  const [avatarColor, setAvatarColor] = useState<string>(AVATAR_COLORS[7])
+  const [isLoading, setIsLoading] = useState(false)
 
-  const [description, setDescription] = useState("");
-  const [name, setName] = useState("");
-  const [avatarSeed, setAvatarSeed] = useState<string>(crypto.randomUUID());
-  const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-  function shuffleAvatar() {
-    const seed = crypto.randomUUID();
-    setAvatarSeed(seed);
-  }
+  const router = useRouter()
 
+  const avatarUrl = buildAvatarUrl(avatarSeed, avatarColor)
 
-  const onClickCreateAgent = async (e: any) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const onClickCreateAgent = async () => {
+    if (isLoading || !name) return
+    setIsLoading(true)
+
     try {
-      const avatarImage = `https://api.dicebear.com/10.x/gaze/svg?tags=animation&seed=${avatarSeed}`;
-      const newAgentId = crypto.randomUUID();
-      const result = await axios.post('/api/agent', {
-        name: name,
-        description: description,
-        agentImage: avatarImage,
-        agentId: newAgentId
-      });
+      const newAgentId = crypto.randomUUID()
 
-      console.log(result.data);
-      router.push('/workspace/' + newAgentId);
-      setIsLoading(false);
-    }
-    catch (e) {
-      setIsLoading(false);
+      await axios.post("/api/agent", {
+        name,
+        description: "",
+        agentImage: avatarUrl,
+        agentId: newAgentId,
+      })
+
+      router.push("/workspace/" + newAgentId)
+    } catch (e) {
       console.log("Error creating agent: ", e)
+    } finally {
+      setIsLoading(false)
     }
   }
-
-
-
 
   return (
-    <main className="min-h-svh bg-background px-6 py-8 sm:px-10 lg:px-22">
-      <div className="">
-        <header>
-          <h1 className="text-3xl font-bold tracking-normal text-foreground sm:text-4xl">
-            Create New Agent
-          </h1>
-          <p className="mt-2 text-base text-muted-foreground sm:text-lg">
-            Customize your agent and give it a clear purpose.
-          </p>
-        </header>
+    <div className="flex min-h-svh flex-col bg-muted/30">
+      {/* Header */}
+      <header className="flex items-center gap-2 border-b bg-background px-6 py-4">
+        <Avatar className="h-6 w-6">
+          <AvatarImage src={avatarUrl} alt="" />
+          <AvatarFallback>{name.slice(0, 1).toUpperCase() || "?"}</AvatarFallback>
+        </Avatar>
+        <span className="text-sm font-medium">New Bot</span>
+      </header>
 
-        <form className="mt-6 mx-auto w-full max-w-xl">
-          <section className="flex flex-col items-center">
-            <img src={`https://api.dicebear.com/10.x/gaze/svg?tags=animation&seed=${avatarSeed}`}
-              className="h-28 w-28"
-            />
+      {/* Content */}
+      <main className="flex flex-1 items-center justify-center px-6 py-12">
+        <Card className="w-full max-w-md shadow-sm">
+          <CardHeader className="items-center text-center">
+            <Avatar className="h-24 w-24 border shadow-sm">
+              <AvatarImage src={avatarUrl} alt="Agent avatar" />
+              <AvatarFallback>{name.slice(0, 1).toUpperCase() || "?"}</AvatarFallback>
+            </Avatar>
+            <CardTitle className="mt-4 text-xl">Create your agent</CardTitle>
+            <CardDescription>Pick a look and give it a name to get started.</CardDescription>
+          </CardHeader>
 
-
-            <Button
-              className="mt-4 h-10 px-5 text-sm"
-              type="button"
-              variant="outline"
-              onClick={shuffleAvatar}
-            >
-              <ShuffleIcon className="size-4" />
-              Shuffle avatar
-            </Button>
-          </section>
-
-          <section className="mx-auto mt-6 w-full max-w-3xl space-y-5">
+          <CardContent className="space-y-6">
+            {/* Color picker */}
             <div className="space-y-2">
-              <Label
-                className="text-base font-semibold text-foreground"
-                htmlFor="agent-name"
-              >
-                Agent name
-              </Label>
+              <Label>Color</Label>
+              <div className="flex flex-wrap gap-2">
+                {AVATAR_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setAvatarColor(color)}
+                    aria-label={`Choisir la couleur ${color}`}
+                    aria-pressed={avatarColor === color}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-full transition hover:scale-110",
+                      avatarColor === color && "ring-2 ring-ring ring-offset-2 ring-offset-background"
+                    )}
+                    style={{ backgroundColor: `#${color}` }}
+                  >
+                    {avatarColor === color && <Check className="h-4 w-4 text-white drop-shadow" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Avatar picker */}
+            <div className="space-y-2">
+              <Label>Avatar</Label>
+              <div className="flex flex-wrap gap-2">
+                {AVATAR_SEEDS.map((seed) => (
+                  <button
+                    key={seed}
+                    type="button"
+                    onClick={() => setAvatarSeed(seed)}
+                    aria-label={`Choisir l'avatar ${seed}`}
+                    aria-pressed={avatarSeed === seed}
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-lg border bg-background transition hover:scale-105",
+                      avatarSeed === seed && "ring-2 ring-ring ring-offset-2 ring-offset-background"
+                    )}
+                  >
+                    <Avatar className="h-7 w-7">
+                      <AvatarImage src={buildAvatarUrl(seed, avatarColor)} alt="" />
+                      <AvatarFallback>{seed.slice(0, 1).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Name field */}
+            <div className="space-y-2">
+              <Label htmlFor="agent-name">Name</Label>
               <Input
                 id="agent-name"
                 name="name"
-                className="h-12 rounded-md px-4 text-base shadow-sm md:text-base"
-                placeholder="Enter agent name"
                 autoComplete="off"
-                onChange={(event) => setName(event.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="LinkedIn manager"
               />
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-baseline gap-4">
-                <Label
-                  className="text-base font-semibold text-foreground"
-                  htmlFor="agent-description"
-                >
-                  Instructions / Description
-                </Label>
-                <span className="text-sm font-medium text-muted-foreground">
-                  Optional
-                </span>
-              </div>
-              <Textarea
-                id="agent-description"
-                name="description"
-                className="min-h-32 resize-none rounded-md px-4 py-3 text-base shadow-sm md:text-base"
-                maxLength={1000}
-                placeholder="Describe what this agent should do, its personality, goals, or special instructions..."
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-              <p className="text-right text-sm text-muted-foreground">
-                {description.length} / 1000
-              </p>
-            </div>
-          </section>
-
-          <div className="mx-auto mt-5 flex w-full max-w-3xl flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Link href="/workspace">
-              <Button
-                className="h-11 w-full px-8 text-sm sm:w-auto"
-                type="button"
-                variant="outline"
-              >
-                Cancel
-              </Button>
-            </Link>
-            <Button className="h-11 px-8 text-sm" type="submit"
+            {/* Submit */}
+            <Button
+              type="button"
               onClick={onClickCreateAgent}
-              disabled={isLoading}
+              disabled={isLoading || !name}
+              className="w-full"
             >
-              {isLoading ? <Loader2 className="animate-spin" /> : null}
-              Create Agent
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              Get started
             </Button>
-          </div>
-        </form>
-      </div>
-    </main>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
   )
 }
 

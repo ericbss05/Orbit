@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import type { MessageType } from "@/type/Message"
 import axios from "axios"
-import { Check, Loader2, ShieldCheck, X } from "lucide-react"
+import { Check, Loader2, ShieldCheck, X, ChevronDown } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { useState } from "react"
 import { RoutineCard } from "./RoutineCard"
 import { ToolSuggestionCard } from "./ToolSuggestionCard"
+import { cn } from "@/lib/utils"
 
 type AgentResponseViewProps = {
   message: MessageType
@@ -93,6 +94,12 @@ export function AgentResponseView({
   )
 }
 
+function formatToolName(tool: string) {
+  // "GMAIL_SEND_EMAIL" ou "gmail-send-email" -> "Gmail send email"
+  const text = tool.replace(/[_-]+/g, " ").trim().toLowerCase()
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 function ConfirmationCard({
   confirmation,
   onResult,
@@ -102,6 +109,7 @@ function ConfirmationCard({
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [decision, setDecision] = useState<"approved" | "rejected" | null>(null)
+  const [open, setOpen] = useState(false)
 
   const decide = async (approved: boolean) => {
     setIsSubmitting(true)
@@ -124,30 +132,83 @@ function ConfirmationCard({
   }
 
   return (
-    <section className="rounded-xl border border-amber-300/70 bg-amber-50/60 p-3.5 dark:border-amber-700/60 dark:bg-amber-950/20">
-      <div className="flex items-start gap-2.5">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" />
-        <div>
-          <p className="text-sm font-semibold">{confirmation.title}</p>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-            {confirmation.description}
-          </p>
+    <section
+      className={cn(
+        "rounded-2xl border bg-card px-4 py-3.5 transition-opacity",
+        decision && "opacity-70"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{confirmation.title}</p>
+          {confirmation.description && (
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+              {confirmation.description}
+            </p>
+          )}
+
+          {confirmation.actions.length > 0 && (
+            <>
+              {/* Noms des tools, toujours visibles */}
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {confirmation.actions.map((action, index) => (
+                  <span
+                    className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+                    key={`${action.tool}-${index}`}
+                  >
+                    {formatToolName(action.tool)}
+                  </span>
+                ))}
+              </div>
+
+              {/* Dépliant : uniquement le détail */}
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                aria-expanded={open}
+              >
+                <ChevronDown
+                  className={cn("size-3.5 transition-transform", open && "rotate-180")}
+                />
+                {open ? "Masquer les détails" : "Voir les détails"}
+              </button>
+
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows] duration-200 ease-out",
+                  open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                )}
+              >
+                <div className="overflow-hidden">
+                  <ul className="mt-2 space-y-2 border-l pl-3">
+                    {confirmation.actions.map((action, index) => (
+                      <li key={`${action.tool}-${index}`}>
+                        <p className="text-[11px] font-medium">
+                          {formatToolName(action.tool)}
+                        </p>
+                        <p className="break-words font-mono text-[11px] leading-5 text-muted-foreground">
+                          {action.summary}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-      <div className="mt-3 space-y-2">
-        {confirmation.actions.map((action, index) => (
-          <div className="rounded-lg border bg-background/80 px-3 py-2" key={`${action.tool}-${index}`}>
-            <p className="text-xs font-medium">{action.tool}</p>
-            <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
-              {action.summary}
-            </p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 flex justify-end gap-2">
+
+      <div className="mt-3 flex items-center justify-end gap-2">
         {decision ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            {decision === "approved" ? <Check className="size-4" /> : <X className="size-4" />}
+            {decision === "approved" ? (
+              <Check className="size-3.5" />
+            ) : (
+              <X className="size-3.5" />
+            )}
             {decision === "approved" ? "Approved" : "Cancelled"}
           </span>
         ) : (
@@ -156,16 +217,18 @@ function ConfirmationCard({
               disabled={isSubmitting}
               onClick={() => decide(false)}
               size="sm"
-              variant="outline"
+              variant="ghost"
+              className="text-muted-foreground"
             >
-              <X /> Cancel
+              Cancel
             </Button>
             <Button
               disabled={isSubmitting}
               onClick={() => decide(true)}
               size="sm"
+              className="rounded-full px-4"
             >
-              {isSubmitting ? <Loader2 className="animate-spin" /> : <Check />}
+              {isSubmitting && <Loader2 className="animate-spin" />}
               Confirm
             </Button>
           </>

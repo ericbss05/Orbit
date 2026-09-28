@@ -45,11 +45,36 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(agentConfig[0]);
     }
 
-    // Fetch all agent configurations for the logged-in user
-    const agentConfigs = await db.select().from(AgentConfig)
+    // Fetch all agent configurations for the logged-in user, along with the
+    // last message exchanged with each one (agent_chat_history has one row
+    // per agent/user pair, so this left join can't create duplicates).
+    const agentConfigs = await db.select({
+        id: AgentConfig.id,
+        agentId: AgentConfig.agentId,
+        name: AgentConfig.name,
+        description: AgentConfig.description,
+        agentImage: AgentConfig.agentImage,
+        tools: AgentConfig.tools,
+        composioSessionId: AgentConfig.composioSessionId,
+        e2bSandboxId: AgentConfig.e2bSandboxId,
+        e2bSandboxStatus: AgentConfig.e2bSandboxStatus,
+        e2bLastActiveAt: AgentConfig.e2bLastActiveAt,
+        e2bPausedAt: AgentConfig.e2bPausedAt,
+        createdAt: AgentConfig.createdAt,
+        userEmail: AgentConfig.userEmail,
+        lastMessage: AgentChatHistory.agentMessage,
+        lastMessageTime: AgentChatHistory.updatedAt,
+    })
+        .from(AgentConfig)
+        .leftJoin(
+            AgentChatHistory,
+            and(
+                eq(AgentChatHistory.agentId, AgentConfig.agentId),
+                eq(AgentChatHistory.userEmail, session.user.email)
+            )
+        )
         .where(eq(AgentConfig.userEmail, session.user.email))
-        .orderBy(desc(AgentConfig.createdAt))
-        ;
+        .orderBy(desc(AgentChatHistory.updatedAt), desc(AgentConfig.createdAt));
 
     return NextResponse.json(agentConfigs);
 }
