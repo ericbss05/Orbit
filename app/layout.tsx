@@ -65,8 +65,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, padding: 0 }} className={figtree.className} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
+      <body style={{ margin: 0, padding: 0 }} className={figtree.className}>
         <AuthProvider>
           <ThemeProvider
             attribute="class"

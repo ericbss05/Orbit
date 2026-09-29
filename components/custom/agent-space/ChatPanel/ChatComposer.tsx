@@ -96,7 +96,7 @@ export function ChatComposer({
         </div>
 
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          {agent.name} can make mistakes. Check important information.
+          Orbit can make mistakes. Check important information.
         </p>
       </div>
     </div>

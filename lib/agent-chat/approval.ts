@@ -14,7 +14,7 @@ export function summarizeApprovalActions(actions: Array<{ tool: string; argument
         } catch {
             // On ne divulgue pas l'état non parsé.
         }
-        return [{ tool: action.tool, summary: "Execute this external action." }];
+        return [{ tool: action.tool, summary: "Exécuter cette action externe." }];
     });
 }
 
@@ -40,14 +40,14 @@ export async function createApprovalResponse(params: {
     return agentResponseSchema.parse({
         type: "confirmation",
         intent: "immediate_action",
-        message: "Review this action before I perform it.",
+        message: "Vérifiez cette action avant que je l'exécute.",
         questions: [],
         suggestedTools: [],
         routine: null,
         confirmation: {
             workflowId,
-            title: "Confirm external action",
-            description: "Nothing has been sent or changed yet.",
+            title: "Confirmer l'action externe",
+            description: "Aucune donnée n'a encore été envoyée et aucune modification n'a été effectuée.",
             actions,
         },
     });

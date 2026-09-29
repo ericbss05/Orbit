@@ -1,7 +1,15 @@
 import { Agent, assistant, run, user } from "@openai/agents";
 import { z } from "zod";
 import { createDesktopComputerTool } from "@/lib/e2b/agent-computer";
-import { AgentResponse, RoutineDraft, agentResponseSchema } from "./agent-response-schema";
+import {
+    checkAndConsumeRequestLimit,
+    checkAndConsumeRoutineLimit,
+} from "@/lib/limits";
+import {
+    AgentResponse,
+    RoutineDraft,
+    agentResponseSchema,
+} from "./agent-response-schema";
 import { getClarificationAnswer } from "./clarification-context";
 import {
     buildAgentInstructions,
@@ -29,8 +37,9 @@ function errorMessage(error: unknown) {
 }
 
 function isComputerModelAccessError(message: string) {
-    return /model [`'"]?[\w.-]+[`'"]?.*(does not exist|do not have access)|404.*model/i
-        .test(message);
+    return /model [`'"]?[\w.-]+[`'"]?.*(does not exist|do not have access)|404.*model/i.test(
+        message
+    );
 }
 
 function createDesktopRunFailureResponse(detail: string) {
@@ -93,8 +102,8 @@ export const createAgent = (
     outputType: typeof agentResponseSchema | "text" = agentResponseSchema
 ) => {
     return new Agent({
-        name: name,
-        instructions: instructions,
+        name,
+        instructions,
         tools: [...tools],
         model: getModelForTools(tools),
         outputType,
@@ -115,12 +124,59 @@ export const executeAgentChat = async (
     timezone = "UTC",
     planningOnly = false,
     editingRoutine: RoutineDraft | null = null,
-    vmDesktopContext: VmDesktopContext | null = null
+    vmDesktopContext: VmDesktopContext | null = null,
+    userEmail: string
 ) => {
-    const desktopTool = !planningOnly && vmDesktopContext
-        ? createDesktopComputerTool(vmDesktopContext)
-        : null;
-    const runtimeTools = desktopTool ? [...tools, desktopTool] : tools;
+    /*
+     * ---------------------------------------------------------
+     * DAILY REQUEST LIMIT
+     * ---------------------------------------------------------
+     *
+     * One call to executeAgentChat = one request.
+     *
+     * This is counted before creating/running the OpenAI agent,
+     * so a blocked request never reaches OpenAI.
+     */
+    const usageLimit = checkAndConsumeRequestLimit(userEmail);
+
+    if (!usageLimit.allowed) {
+        return {
+            response: agentResponseSchema.parse({
+                type: "message",
+                intent: "conversation",
+                message:
+                    `Vous avez atteint votre limite quotidienne de ${usageLimit.limit} requetes. ` +
+                    "Veuillez réessayer demain.",
+                questions: [],
+                suggestedTools: [],
+                routine: null,
+                confirmation: null,
+            }),
+            pendingApproval: null,
+        };
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * COMPUTER USE
+     * ---------------------------------------------------------
+     */
+
+    const desktopTool =
+        !planningOnly && vmDesktopContext
+            ? createDesktopComputerTool(vmDesktopContext)
+            : null;
+
+    const runtimeTools = desktopTool
+        ? [...tools, desktopTool]
+        : tools;
+
+    /*
+     * ---------------------------------------------------------
+     * AGENT INSTRUCTIONS
+     * ---------------------------------------------------------
+     */
+
     const formattedInstructions = buildAgentInstructions(
         name,
         instructions,
@@ -131,6 +187,7 @@ export const executeAgentChat = async (
         editingRoutine,
         Boolean(desktopTool)
     );
+
     const agent = createAgent(
         name,
         formattedInstructions,
@@ -138,36 +195,57 @@ export const executeAgentChat = async (
         desktopTool ? "text" : agentResponseSchema
     );
 
+    /*
+     * ---------------------------------------------------------
+     * CONVERSATION HISTORY
+     * ---------------------------------------------------------
+     */
+
     const history = messages.map((msg, index) => {
-        const clarification = msg.role === "user"
-            ? getClarificationAnswer(messages, index)
-            : null;
+        const clarification =
+            msg.role === "user"
+                ? getClarificationAnswer(messages, index)
+                : null;
+
         const content = msg.response
             ? serializeResponseForHistory(msg.response)
             : clarification
                 ? serializeClarificationAnswer(clarification)
                 : msg.content;
 
-        return (
-            msg.role === "assistant" || msg.role === "agent"
-                ? assistant(content)
-                : user(content)
-        );
+        return msg.role === "assistant" || msg.role === "agent"
+            ? assistant(content)
+            : user(content);
     });
 
+    /*
+     * ---------------------------------------------------------
+     * RUN AGENT
+     * ---------------------------------------------------------
+     */
+
     let result;
+
     try {
         result = await run(agent, history, {
-            maxTurns: desktopTool ? MAX_COMPUTER_AGENT_TURNS : MAX_AGENT_TURNS,
+            maxTurns: desktopTool
+                ? MAX_COMPUTER_AGENT_TURNS
+                : MAX_AGENT_TURNS,
+
             errorHandlers: {
                 maxTurns: ({ error, runData }) => {
-                    console.error("Agent tool workflow exceeded the turn limit", {
-                        agent: name,
-                        maxTurns: desktopTool ? MAX_COMPUTER_AGENT_TURNS : MAX_AGENT_TURNS,
-                        vmDesktopEnabled: Boolean(desktopTool),
-                        generatedItems: runData.newItems.length,
-                        error: error.message,
-                    });
+                    console.error(
+                        "Agent tool workflow exceeded the turn limit",
+                        {
+                            agent: name,
+                            maxTurns: desktopTool
+                                ? MAX_COMPUTER_AGENT_TURNS
+                                : MAX_AGENT_TURNS,
+                            vmDesktopEnabled: Boolean(desktopTool),
+                            generatedItems: runData.newItems.length,
+                            error: error.message,
+                        }
+                    );
 
                     return {
                         finalOutput: desktopTool
@@ -182,9 +260,14 @@ export const executeAgentChat = async (
                 },
             },
         });
-    } catch (error: any) {
-        console.error("OpenAI agent run failed", { agent: name, error });
+    } catch (error: unknown) {
+        console.error("OpenAI agent run failed", {
+            agent: name,
+            error,
+        });
+
         const detail = errorMessage(error);
+
         return {
             response: desktopTool
                 ? createDesktopRunFailureResponse(detail)
@@ -193,22 +276,48 @@ export const executeAgentChat = async (
         };
     }
 
+    /*
+     * ---------------------------------------------------------
+     * PROCESS RESULT
+     * ---------------------------------------------------------
+     */
+
     try {
-        if (result?.interruptions && result.interruptions.length > 0) {
+        /*
+         * Human approval / interruption
+         */
+        if (
+            result?.interruptions &&
+            result.interruptions.length > 0
+        ) {
             return {
                 response: null,
                 pendingApproval: {
                     state: result.state?.toString() ?? "",
-                    actions: result.interruptions.map((interruption) => ({
-                        tool: interruption.name ?? "External action",
-                        arguments: interruption.arguments ?? "{}",
-                    })),
+                    actions: result.interruptions.map(
+                        (interruption) => ({
+                            tool:
+                                interruption.name ??
+                                "External action",
+                            arguments:
+                                interruption.arguments ??
+                                "{}",
+                        })
+                    ),
                 },
             };
         }
 
-        const finalOutput = result?.finalOutput ?? maxTurnsFallback;
-        if (desktopTool && typeof finalOutput === "string") {
+        const finalOutput =
+            result?.finalOutput ?? maxTurnsFallback;
+
+        /*
+         * Computer Use returns text
+         */
+        if (
+            desktopTool &&
+            typeof finalOutput === "string"
+        ) {
             return {
                 response: agentResponseSchema.parse({
                     type: "message",
@@ -223,16 +332,45 @@ export const executeAgentChat = async (
             };
         }
 
-        const parsed = agentResponseSchema.safeParse(finalOutput);
+        /*
+         * Standard structured output
+         */
+        const parsed =
+            agentResponseSchema.safeParse(finalOutput);
+
         if (!parsed.success) {
-            console.error("Agent returned invalid finalOutput", { agent: name, finalOutput });
-            return { response: maxTurnsFallback, pendingApproval: null };
+            console.error(
+                "Agent returned invalid finalOutput",
+                {
+                    agent: name,
+                    finalOutput,
+                }
+            );
+
+            return {
+                response: maxTurnsFallback,
+                pendingApproval: null,
+            };
         }
 
-        return { response: parsed.data, pendingApproval: null };
+        return {
+            response: parsed.data,
+            pendingApproval: null,
+        };
     } catch (error) {
-        console.error("Failed to process agent run result", { agent: name, error, result });
-        return { response: maxTurnsFallback, pendingApproval: null };
+        console.error(
+            "Failed to process agent run result",
+            {
+                agent: name,
+                error,
+                result,
+            }
+        );
+
+        return {
+            response: maxTurnsFallback,
+            pendingApproval: null,
+        };
     }
 };
 
@@ -241,12 +379,51 @@ export const executeRoutine = async (
     routineInstructions: string,
     tools: any[],
     timezone: string,
-    vmDesktopContext: VmDesktopContext | null = null
+    vmDesktopContext: VmDesktopContext | null = null,
+    userEmail: string
 ) => {
+    /*
+     * ---------------------------------------------------------
+     * DAILY ROUTINE LIMIT
+     * ---------------------------------------------------------
+     *
+     * Each routine execution consumes one routine allowance.
+     *
+     * This is separate from the normal request limit.
+     *
+     * Daily limits:
+     * - 25 agent requests
+     * - 3 routine executions
+     */
+    const routineLimit =
+        checkAndConsumeRoutineLimit(userEmail);
+
+    if (!routineLimit.allowed) {
+        throw new Error(
+            `You've reached your daily limit of ${routineLimit.limit} routines. Please try again tomorrow.`
+        );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * COMPUTER USE
+     * ---------------------------------------------------------
+     */
+
     const desktopTool = vmDesktopContext
         ? createDesktopComputerTool(vmDesktopContext)
         : null;
-    const runtimeTools = desktopTool ? [...tools, desktopTool] : tools;
+
+    const runtimeTools = desktopTool
+        ? [...tools, desktopTool]
+        : tools;
+
+    /*
+     * ---------------------------------------------------------
+     * ROUTINE AGENT
+     * ---------------------------------------------------------
+     */
+
     const agent = new Agent({
         name,
         model: getModelForTools(runtimeTools),
@@ -260,13 +437,27 @@ export const executeRoutine = async (
         ),
     });
 
-    const routineResult = await run(agent, "Run the approved routine now.", {
-        maxTurns: desktopTool ? 30 : 12,
-    });
+    /*
+     * ---------------------------------------------------------
+     * RUN ROUTINE
+     * ---------------------------------------------------------
+     */
+
+    const routineResult = await run(
+        agent,
+        "Run the approved routine now.",
+        {
+            maxTurns: desktopTool ? 30 : 12,
+        }
+    );
 
     if (!routineResult?.finalOutput) {
-        throw new Error("The routine execution did not return a result");
+        throw new Error(
+            "The routine execution did not return a result"
+        );
     }
 
-    return routineExecutionSchema.parse(routineResult.finalOutput);
+    return routineExecutionSchema.parse(
+        routineResult.finalOutput
+    );
 };

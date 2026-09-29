@@ -21,13 +21,13 @@ type RoutineCardProps = {
 }
 
 const weekDayLabels: Record<RoutineDraft["schedule"]["weekDays"][number], string> = {
-  MO: "Mon",
-  TU: "Tue",
-  WE: "Wed",
-  TH: "Thu",
-  FR: "Fri",
-  SA: "Sat",
-  SU: "Sun",
+  MO: "Lun",
+  TU: "Mar",
+  WE: "Mer",
+  TH: "Jeu",
+  FR: "Ven",
+  SA: "Sam",
+  SU: "Dim",
 }
 
 function displayToolName(slug: string) {
@@ -86,6 +86,7 @@ export function RoutineCard({
     && (routine.schedule.frequency !== "weekly" || routine.schedule.weekDays.length > 0)
   )
   const isReady = hasCompleteDetails && allConnected
+
   const updateConnection = (slug: string, isConnected: boolean) => {
     setTools((current) =>
       current.map((tool) =>
@@ -95,6 +96,7 @@ export function RoutineCard({
       )
     )
   }
+
   const createRoutine = async () => {
     setIsCreating(true)
 
@@ -107,20 +109,27 @@ export function RoutineCard({
         const { data } = await axios.post("/api/routines", { agentId, routine, messageId })
         setCreatedId(data.routine.id)
       }
+
       setIsCreated(true)
       window.dispatchEvent(new CustomEvent("routines-changed", { detail: { agentId } }))
       onSaved?.()
+
       toast.add({
-        title: routineId ? "Routine updated" : "Routine created",
-        description: `Your agent will run ${routineId ? "the updated routine" : "it"} at the scheduled time.`,
+        title: routineId ? "Routine mise à jour" : "Routine créée",
+        description: `Votre agent exécutera ${routineId ? "la routine mise à jour" : "cette routine"} à l'heure prévue.`,
         type: "success",
       })
     } catch (error) {
       const description = error instanceof AxiosError
         && typeof error.response?.data?.error === "string"
         ? error.response.data.error
-        : `Unable to ${routineId ? "update" : "create"} this routine.`
-      toast.add({ title: `Could not ${routineId ? "update" : "create"} routine`, description, type: "error" })
+        : `Impossible de ${routineId ? "mettre à jour" : "créer"} cette routine.`
+
+      toast.add({
+        title: `Impossible de ${routineId ? "mettre à jour" : "créer"} la routine`,
+        description,
+        type: "error",
+      })
     } finally {
       setIsCreating(false)
     }
@@ -131,10 +140,14 @@ export function RoutineCard({
       <div className="border-b bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
         <div className="flex items-center gap-2 text-xs font-medium text-primary">
           <Sparkles className="size-3.5" />
-          Suggested routine
+          Routine suggérée
         </div>
+
         <h3 className="mt-2 text-base font-semibold leading-6">{routine.name}</h3>
-        <p className="mt-1 text-sm leading-5 text-muted-foreground">{routine.goal}</p>
+
+        <p className="mt-1 text-sm leading-5 text-muted-foreground">
+          {routine.goal}
+        </p>
       </div>
 
       <div className="space-y-5 p-4">
@@ -142,16 +155,17 @@ export function RoutineCard({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Instructions
           </p>
+
           <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6">
             {routine.instructions}
           </p>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <ScheduleDetail icon={CalendarDays} label="Starts" value={routine.schedule.startDate} />
-          <ScheduleDetail icon={Clock3} label="Time" value={routine.schedule.time} />
-          <ScheduleDetail icon={Repeat2} label="Frequency" value={routine.schedule.frequency} />
-          <ScheduleDetail icon={Globe2} label="Timezone" value={routine.schedule.timezone} />
+          <ScheduleDetail icon={CalendarDays} label="Début" value={routine.schedule.startDate} />
+          <ScheduleDetail icon={Clock3} label="Heure" value={routine.schedule.time} />
+          <ScheduleDetail icon={Repeat2} label="Fréquence" value={routine.schedule.frequency} />
+          <ScheduleDetail icon={Globe2} label="Fuseau horaire" value={routine.schedule.timezone} />
         </div>
 
         {routine.schedule.weekDays.length > 0 && (
@@ -168,15 +182,17 @@ export function RoutineCard({
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Required tools
+                Outils requis
               </p>
+
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Suggested from the routine requirements
+                Suggérés en fonction des besoins de la routine
               </p>
             </div>
+
             {requiredTools.length > 0 && allConnected && (
               <Badge variant="secondary" className="text-emerald-700 dark:text-emerald-400">
-                <CheckCircle2 data-icon="inline-start" /> Ready
+                <CheckCircle2 data-icon="inline-start" /> Prêt
               </Badge>
             )}
           </div>
@@ -194,7 +210,7 @@ export function RoutineCard({
             </div>
           ) : (
             <div className="rounded-xl border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
-              This routine does not require an external tool.
+              Cette routine ne nécessite aucun outil externe.
             </div>
           )}
         </div>
@@ -202,13 +218,14 @@ export function RoutineCard({
         <div className="flex items-center justify-between gap-3 border-t pt-4">
           <p className="text-xs leading-5 text-muted-foreground">
             {isCreated
-              ? "This routine is active and scheduled."
+              ? "Cette routine est active et programmée."
               : isReady
-                ? "Review the details, then confirm this automation."
+                ? "Vérifiez les détails, puis confirmez cette automatisation."
                 : !hasCompleteDetails
-                  ? "The agent still needs complete schedule details."
-                  : "Connect every required tool to continue."}
+                  ? "L'agent a encore besoin de détails complets sur la planification."
+                  : "Connectez tous les outils requis pour continuer."}
           </p>
+
           <Button
             className="shrink-0"
             disabled={!isReady || isCreating || isCreated}
@@ -221,11 +238,12 @@ export function RoutineCard({
             ) : (
               <Sparkles />
             )}
+
             {isCreating
-              ? routineId ? "Updating..." : "Creating..."
+              ? routineId ? "Mise à jour..." : "Création..."
               : isCreated
-                ? routineId ? "Updated" : "Created"
-                : routineId ? "Update routine" : "Create routine"}
+                ? routineId ? "Mise à jour effectuée" : "Créée"
+                : routineId ? "Mettre à jour" : "Créer la routine"}
           </Button>
         </div>
       </div>
@@ -243,9 +261,13 @@ function ScheduleDetail({ icon: Icon, label, value }: ScheduleDetailProps) {
   return (
     <div className="flex min-w-0 items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5">
       <Icon className="size-4 shrink-0 text-muted-foreground" />
+
       <div className="min-w-0">
         <p className="text-[11px] text-muted-foreground">{label}</p>
-        <p className="truncate text-xs font-medium capitalize">{value}</p>
+
+        <p className="truncate text-xs font-medium capitalize">
+          {value}
+        </p>
       </div>
     </div>
   )
