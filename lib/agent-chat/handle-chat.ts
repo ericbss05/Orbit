@@ -121,7 +121,8 @@ export async function handleChatPost(userEmail: string | null | undefined, paylo
             requestTimezone,
             planningOnly,
             editingRoutine,
-            requiresVmDesktopForRequest(latestUserText) ? { agentId, userEmail } : null
+            requiresVmDesktopForRequest(latestUserText) ? { agentId, userEmail } : null,
+             userEmail
         );
 
     // 6. Approbation en attente

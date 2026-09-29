@@ -451,7 +451,8 @@ export const executeRoutineExecution = inngest.createFunction(
         {
           agentId: loaded.routine.agentId,
           userEmail: loaded.routine.userEmail,
-        }
+        },
+        loaded.routine.userEmail
       );
 
       if (agentResult.status === 'failed') {
@@ -579,7 +580,8 @@ export const executeVmDesktopTask = inngest.createFunction(
         {
           agentId: runEvent.agentId,
           userEmail: runEvent.userEmail,
-        }
+        },
+        runEvent.userEmail
       );
     });
 
